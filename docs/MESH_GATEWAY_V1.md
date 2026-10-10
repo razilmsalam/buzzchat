@@ -59,7 +59,7 @@ adversaries, alone or working together.
 | Adversary | Capability | Design response |
 | --- | --- | --- |
 | Local RF observer | Scans BLE and Wi-Fi Aware, records advertisements, timing and packet sizes | Outer packet carries no stable identity and no outer signature; random sender ID; randomized origin TTL; envelope padding with compression forbidden; jittered timestamps and retry intervals. First-hop linkage is a stated residual risk. |
-| Malicious mesh relay | Drops, delays, replays, edits or floods packets | Canonical carried bytes, Nostr id and BIP-340 signature checks, envelope signature over consent flags, event-id dedup, expiry, PoW, per-link ceilings and fair scheduling. Unauthenticated acks change nothing but UI. |
+| Malicious mesh relay | Drops, delays, replays, edits or floods packets; poisons in-flight fragment sets by reusing an overheard fragment ID | Canonical carried bytes, Nostr id and BIP-340 signature checks, envelope signature over consent flags, event-id dedup, expiry, PoW, per-link ceilings and fair scheduling, gateway fragment sets keyed per ingress link with first-copy-wins indices. Unauthenticated acks change nothing but UI. |
 | Malicious gateway | Edits, withholds, publishes over clearnet, logs, forges acks | Gateways cannot edit (signature, canonical bytes) or re-attribute (no gateway identity). Withholding is countered by many gateways and author retries. Clearnet publishing is forbidden when the author requires Tor, and other gateways still publish. Acks are advisory and never change propagation. Logging rules are below. |
 | Malicious Nostr relay | Rejects, censors, lies in `OK` frames, correlates by IP or by connection | Publish over isolated Tor circuits on dedicated sockets to several relays; presence is checked per relay; `OK` is treated as unverified evidence |
 | Spam / sybil | Generates many keys and posts | Per-post keys make per-author limits weak. Controls are per-link ceilings, per-link fair scheduling of re-origination, per-link store quotas, and size and store caps. PoW is a cost floor for honest-device spam, not a primary sybil control, because a laptop mines 16 bits in milliseconds. |
@@ -526,7 +526,12 @@ existing behavior.
     ANNOUNCE skew tolerance,
     `app/src/main/java/com/bitchat/android/mesh/MessageHandler.kt:31`); or
   - `now > expiresAt + 600`.
-- An expired post is evicted from every store and must never be published.
+- The 600 s grace after `expiresAt` applies only to storing, forwarding and
+  sync, to absorb clock skew between relays. A gateway must not publish once
+  its own clock passes `expiresAt` itself, with no grace. Anything uncertain is
+  resolved by not publishing.
+- An expired post (`now > expiresAt + 600`) is evicted from every store and
+  must never be published.
 - Clock sanity on the author: before signing, the client compares its clock
   with the median timestamp of recently verified announcements. If they differ
   by more than 10 minutes, it warns the user and does not sign until the user
@@ -613,6 +618,19 @@ event id present in the local outbox.
   Requiring PoW keeps the inbound feed from being a free spam channel; the
   gateway forwards only internet events that already carry it. The envelope is
   at most 2,304 bytes after padding to a multiple of 256.
+- Decoding is fail-closed in the same way as `0x2A`: `version` must be `0x01`
+  (unknown inbound versions are dropped and never re-originated), `flags` must
+  be `0x00`, the total length must be a multiple of 256, padding must be at
+  most 255 bytes, every padding byte must be zero, and the packet and its
+  fragments must have `IS_COMPRESSED` clear. There is no envelope signature;
+  the event's own id and BIP-340 signature are the only authenticity checks.
+- **Freshness.** `0x2C` has no `expiresAt`. A receiver rejects an inbound event
+  whose `created_at` is more than 600 s in the future or more than 24 h in the
+  past by its own clock. Inbound ids stay in the seen set until
+  `created_at + 24 h + 10 min`, and inbound posts are kept in memory only, under
+  the same caps as the relay store but in a separate 50-post pool so inbound
+  traffic never evicts `0x2A` posts. A gateway injects only events whose
+  `created_at` is within the last 6 h.
 - Origin TTL drawn uniformly from `1..3`, unsigned origination API.
 - Receivers verify the id and signature before displaying the post or marking
   it seen. The relay-layer dedup in `NostrRelayManager` runs before signature
@@ -715,6 +733,19 @@ a node forwards.
    (`app/src/main/java/com/bitchat/android/util/AppConstants.kt:40`), capped at
    16 concurrent gateway-type sets so they cannot starve chat reassembly. The
    reassembled post goes through the fail-closed checks.
+   **Fragment-set poisoning.** `FragmentManager` keys a set by fragment ID
+   alone (`app/src/main/java/com/bitchat/android/mesh/FragmentManager.kt:189`),
+   drops the whole set when a fragment arrives with a different total or
+   `originalType` (`FragmentManager.kt:198-202`), and lets a later fragment
+   overwrite an index already held (`FragmentManager.kt:236, 255`). A
+   neighbor that overhears a fragment ID can therefore kill or corrupt an
+   in-flight set. For gateway-type sets, new clients key reassembly by
+   (ingress link ID, fragment ID), keep the first copy of each index, and
+   discard the set if a second, different copy of an index arrives. A
+   poisoned or failed set never marks an id as seen, never triggers the early
+   duplicate check for the genuine post, and is charged to the ingress link.
+   The genuine post still arrives through author retries, other
+   re-originations or sync, so poisoning causes delay, not suppression.
 4. **Record and store.** A valid post whose id is new is recorded in the seen
    set and stored in the relay store, whatever the budget state.
 5. **Re-originate once.** Each new node re-originates each event id **at most
@@ -869,12 +900,17 @@ Receiver policy (not wire fields) for Android v1. Link identity is
 fragment set is charged to the ingress link of its **first** fragment. A null
 link ID falls into one shared, conservative bucket.
 
-- **Per-link ceiling:** at most 30 reassembled gateway-type fragment sets per
-  minute per ingress link, counting valid posts, invalid posts and duplicates
+- **Per-link ceiling:** at most 30 `0x2A` deliveries (fragment sets or
+  unfragmented packets) per minute per ingress link, counting valid posts,
+  invalid or poisoned sets, unknown-version envelopes and duplicates
   (including early duplicates detected at fragment index 0). Beyond that,
-  further sets from that link are discarded before reassembly. Honest
-  neighbors re-originate at most 20 posts per minute, so an honest link stays
+  further `0x2A` sets from that link are discarded before reassembly. An honest
+  neighbor sends at most 20 re-originations, 5 sync responses and
+  2 unknown-version re-originations per minute (27), so an honest link stays
   under the ceiling; only an attacker's own link saturates.
+- **Per-link ceiling for acks and inbound:** at most 12 `0x2B` plus `0x2C`
+  deliveries per minute per ingress link (an honest neighbor sends at most
+  6 + 2 = 8). Excess packets are discarded before parsing.
 - **Per-node re-origination budget:** at most 20 `0x2A` re-originations per
   minute (halved in the LOW band), served from a per-ingress-link
   deficit-round-robin queue, so a flooding link gets at most its fair share.
@@ -1263,6 +1299,9 @@ Required seams:
 | 2.9 | PoW cases: target < 16; actual < 16; actual < committed target; two nonce tags; non-numeric target; nonce tag with 2 elements; 72 h lifetime with target 16 | Each rejected | U |
 | 2.10 | Unknown envelope version | Not stored, displayed, synced, acked or published; re-originated at most 2 per minute with carried TTL | U |
 | 2.11 | 72 h post at maximum `created_at` jitter; one second past the bound | First accepted; second rejected | U |
+| 2.12 | Neighbor replays an overheard fragment ID with altered data, a different total, a different `originalType`, or a forged index 0 claiming an already-seen id | Poisoned set discarded and charged to its ingress link; id not marked seen; genuine post accepted from the next copy (retry, re-origination or sync); a set from another link with the same fragment ID is unaffected | U, S |
+| 2.13 | `0x2C` with `created_at` 25 h old, 11 min in the future, non-zero flags, unknown version, or non-zero padding | Rejected; not displayed, not marked seen, not re-originated | U |
+| 2.14 | Gateway clock between `expiresAt` and `expiresAt + 600` | Post still stored and forwarded; gateway does not publish | U |
 
 ### 3. Flooding
 
@@ -1275,6 +1314,9 @@ Required seams:
 | 3.5 | Gateway receives 5,000 valid posts | Publishes ≤ 30/min; queue ≤ 100; DM queue unaffected | U |
 | 3.6 | Queued chat packets and queued gateway fragments on one fake link | All chat packets sent before the next gateway re-origination starts | U |
 | 3.7 | A post whose fragments arrive over two links | Charged once, to the link of the first fragment | U |
+| 3.8 | Forged `0x2B` acks for every stored id at line rate from one link | Excess beyond 12 `0x2B`+`0x2C` per minute on that link discarded before parsing; each node re-originates ≤ 6 acks/min and each id at most once; author retry schedule unchanged | U, S |
+| 3.9 | Gateway sync requests at line rate with fresh random senderIDs from one link | Responder answers that link at most once per 60 s with ≤ 5 posts paced ≥ 500 ms; chat latency within the 3.1 bound | U, S |
+| 3.10 | 100,000 gateway transmissions with distinct random senderIDs | `PacketProcessor` per-sender actor count stays bounded by idle-actor eviction; heap stable | U |
 
 ### 4. Network
 
@@ -1291,6 +1333,8 @@ Required seams:
 | 4.9 | Path through a BLE↔Wi-Fi bridge node | Delivery succeeds despite the double TTL decrement, via sync | Manual matrix until Mesh Lab supports ≥ 3 devices |
 | 4.10 | Legacy relays at network size > 100 | Reassembly success vs hop count measured and reported | S |
 | 4.11 | Author retries observed by one neighbor | Retry times not periodic; retries stop being sent once the post is received back | M |
+| 4.12 | Malicious fake relay answers `["OK", id, true]` to every `EVENT`, stores nothing and answers every `REQ` with a valid copy | Other target relays still receive the event (each relay is checked and published independently); the ack reports the lying relay among `relaysAccepted` but stays labelled unverified | S |
+| 4.13 | Relay rejects the event as too large (thumbnail post) | Marked `invalid:` for that relay, not retried there; other relays unaffected | U, S |
 
 ### 5. Device
 
@@ -1303,6 +1347,8 @@ Required seams:
 | 5.5 | Author clock off by days or years | Warning before signing; gateways reject out-of-window posts; no crash | U |
 | 5.6 | Gateway clock off by days | Validity checks reject; nothing is published outside the window | U |
 | 5.7 | BLE permission denied / no Wi-Fi Aware hardware | Composer queues the post and explains why nothing is sent; no crash | U, M |
+| 5.8 | Storage full or encrypted-preferences write failure when queueing a signed post | Post is not shown as queued and is never transmitted unpersisted; user told to retry; key array still zeroed | U |
+| 5.9 | App backgrounded for hours under Doze with the mesh foreground service running | Retries and re-origination continue within power rules; no wakeups beyond the existing service budget | M |
 
 ### Release-gate entries
 
