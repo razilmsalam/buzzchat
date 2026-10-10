@@ -103,6 +103,25 @@ Five hypotheses came up in every interview:
 | [farhan](personas/farhan.md) | Farhan, 35, freelance journalist | Guwahati and Lucknow | His job is verifiable evidence, not chat. The design fails him without signed provenance, media support, source protection that travels with the file, and a low profile. |
 | [lakshmi](personas/lakshmi.md) | Lakshmi, 40, community health worker and union leader | Small town, Tamil Nadu | Uses a shared, overloaded Android Go phone. Wants venue changes to reach a sit-in, and drops anything that looks secret at home, singles women out over Bluetooth, or slows the health app her income depends on. |
 
+### See also: Gen Z persona set
+
+A second set of six fictional personas, aged 19 to 24 and modelled on the
+2026 youth protests over exam-paper leaks, is analysed separately in
+[GENZ_RESEARCH_SYNTHESIS](GENZ_RESEARCH_SYNTHESIS.md). That set also reacted
+to a movement signing key (seal). It was not part of the concept shown to
+this set, although this set asked on its own for in-person committee and
+role seals (see *Verified-source labels*). Its scores use a
+maximum of 18 and are not merged with the scores here.
+
+| Key | Persona (fictional) | One-line role |
+| --- | --- | --- |
+| [genz-meme-admin](personas/genz-meme-admin.md) | Kabir, 21 | Co-admin of a satirical Bhojpuri/Hindi meme page, Bihar |
+| [genz-neet-aspirant](personas/genz-neet-aspirant.md) | Sana, 19 | Medical entrance aspirant and first-time protester, Rajasthan |
+| [genz-volunteer-medic](personas/genz-volunteer-medic.md) | Arjun, 20 | Paramedical diploma student, field medic and volunteer coordinator, Kolkata |
+| [genz-factchecker](personas/genz-factchecker.md) | Meera, 23 | Software tester and volunteer fact-checker on iPhone, Bengaluru |
+| [genz-gig-worker](personas/genz-gig-worker.md) | Imran, 24 | Food-delivery rider, Hyderabad |
+| [genz-queer-student](personas/genz-queer-student.md) | Ritu (she/they), 22 | Queer design student and poster-kit maker, Pune |
+
 ## Method and limits
 
 - **Inputs.** Each persona is a synthetic interview, structured as top
@@ -438,6 +457,22 @@ could be used to single out real people.
 | An inter-state migrant worker (for example a construction or factory worker far from home) whose language differs from the local one | Language mismatch with local notices, a single shared phone in a dormitory, and family hundreds of kilometres away | Multilingual notices, the courier DM to family, and whether employers or contractors could misuse rosters |
 | A volunteer street medic or legal-aid volunteer at protests | The board's trust model leans on medic and legal roles; their own exposure as role-holders is untested | What does carrying a role seal cost them? How are seals handed over or revoked when a phone is lost? |
 | A Muslim woman student or a woman from a religious minority who faces online abuse | Harassment controls are designed from secondhand accounts (Aamir, Priya, Farhan) rather than from the people most targeted | Which defaults (no photos, temporary names, block and report) actually matter, and what is missing? |
+
+**Partly covered by the Gen Z set** ([GENZ_RESEARCH_SYNTHESIS](GENZ_RESEARCH_SYNTHESIS.md)).
+Each of these is still a fictional persona, not a substitute for real
+participants:
+
+| Gap above | Gen Z persona | What it now covers | What is still missing |
+| --- | --- | --- | --- |
+| LGBTQ+ person | [Ritu](personas/genz-queer-student.md), queer student (she/they), out to friends but not family | Outing through notifications, gallery, group names and morphed images; invite-only safety channels; a household check as the main threat | A trans person's experience; a shared family phone (Ritu has her own); anyone outside a student setting |
+| Inter-state migrant worker | [Imran](personas/genz-gig-worker.md), food-delivery rider (gig worker) | Time and battery poverty, a phone that is a work tool, multilingual low-text needs (Telugu, Urdu, Dakhni), voice notes, distrust of sideloaded APKs | He lives at home in his own city: a dormitory shared phone, a local-language mismatch and family far away are still uncovered |
+| Volunteer street medic or legal-aid volunteer | [Arjun](personas/genz-volunteer-medic.md), field medic and coordinator | Role seals handed out in person, revocation by two leads, identity-free patient handover, urgent requests with acknowledgement | A legal-aid volunteer |
+| Muslim woman student or minority woman facing online abuse | [Meera](personas/genz-factchecker.md) (gendered trolling after a debunk) and [Imran](personas/genz-gig-worker.md) (communal targeting of a Muslim-named man) | Harassment after public verification; writing style and names as targeting cues | A Muslim woman's own perspective is still missing |
+| Bhojpuri speakers (see *Known biases*) | [Kabir](personas/genz-meme-admin.md) | Hindi-first UI with Bhojpuri strings for relatives | Other less-supported languages listed above |
+
+The Gen Z set adds no coverage for blind, low-vision or Deaf users, people
+without a phone, Adivasi communities, or the other side of the Manipur
+conflict. Those rows stay open.
 
 Also consider, for adversarial review rather than as users: a person who
 wants to disrupt a peaceful gathering with fake notices, and a family member
