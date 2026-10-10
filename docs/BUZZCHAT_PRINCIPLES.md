@@ -42,3 +42,5 @@ holding?** If not, simplify it or hide it.
 ## Related specifications
 
 - [Mesh gateway posts v1](MESH_GATEWAY_V1.md)
+- [Offline bundle transfer v1](OFFLINE_BUNDLE_V1.md)
+- [Join by link v1](WEB_JOIN_V1.md)
